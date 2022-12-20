@@ -9,8 +9,7 @@ export default class Connection extends EventEmitter {
     super();
 
     this.#self = new Peer({
-      host: "localhost",
-      port: 8080,
+      host: location.host,
       path: "/peerjs"
     });
 

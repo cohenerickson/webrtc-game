@@ -25,6 +25,17 @@ module.exports = {
       directory: path.join(__dirname, "public")
     },
     compress: true,
-    port: 3000
+    port: 3000,
+    proxy: {
+      "/peerjs/peerjs/id": {
+        target: "http://localhost:8080",
+        changeOrigin: true
+      },
+      "/peerjs": {
+        target: "ws://localhost:8080",
+        changeOrigin: true,
+        ws: true
+      }
+    }
   }
 };
