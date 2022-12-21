@@ -1,37 +1,39 @@
 import Peer, { DataConnection } from "peerjs";
 import { EventEmitter } from "events";
+import log from "./util/log";
 
 export default class Connection extends EventEmitter {
   #peers: Map<string, DataConnection> = new Map<string, DataConnection>();
-  #self: Peer;
+  peer: Peer;
 
   constructor() {
     super();
 
-    this.#self = new Peer({
-      host: location.host,
+    this.peer = new Peer({
+      host: location.hostname,
+      port: Number(location.host.split(":")[1]) || 443,
       path: "/peerjs"
     });
 
-    this.#self.on("open", (): void => {
-      this.#self.listAllPeers((ids): void => {
+    this.peer.on("open", (): void => {
+      this.peer.listAllPeers((ids): void => {
         ids.forEach((id): void => {
-          if (id === this.#self.id) return;
+          if (id === this.peer.id) return;
           if (this.#peers.has(id)) return;
-          const peerConnection = this.#self.connect(id, { reliable: true });
+          const peerConnection = this.peer.connect(id, { reliable: true });
           this.#subscribePeer(id, peerConnection);
         });
         let ready = false;
         const checkReadyState = () => {
           let allReady = true;
           ids.forEach((id): void => {
-            if (!this.#peers.has(id) && id !== this.#self.id) {
+            if (!this.#peers.has(id) && id !== this.peer.id) {
               allReady = false;
             }
           });
           if (allReady && !ready) {
-            log("READY", this.#self.id);
-            this.emit("ready", this.#self.id);
+            log("READY", "magenta", this.peer.id);
+            this.emit("ready", this.peer.id);
             ready = true;
           }
           if (!ready) {
@@ -42,8 +44,8 @@ export default class Connection extends EventEmitter {
       });
     });
 
-    this.#self.on("connection", (conn): void => {
-      log("NEW_CONNECTION", conn.peer);
+    this.peer.on("connection", (conn): void => {
+      log("NEW_CONNECTION", "magenta", conn.peer);
       this.#subscribePeer(conn.peer, conn);
     });
   }
@@ -54,32 +56,25 @@ export default class Connection extends EventEmitter {
       this.emit("peerConnect", id);
     });
     conn.on("data", (rawData: any): void => {
-      let data: unknown;
-      if (rawData.startsWith("json:")) {
-        data = JSON.parse(rawData.slice(5));
-      } else if (rawData.startsWith("string:")) {
-        data = rawData.slice(7);
-      } else {
+      let data: any;
+      try {
+        data = JSON.parse(rawData);
+      } catch {
         data = rawData;
       }
-      log("INCOMING", id, data);
-      this.emit("data", data);
+      log("INCOMING", "magenta", id, data);
+      this.emit("data", data, id);
+      this.emit(`data:${id}`, data, id);
     });
     conn.on("close", (): void => {
-      log("CONNECTION_CLOSED", id);
+      log("CONNECTION_CLOSED", "magenta", id);
       this.#peers.delete(id);
       this.emit("peerDisconnect", id);
     });
   }
 
-  send(rawData: any, peers?: string | string[]): void {
-    let data: string;
-    try {
-      data = `json:${JSON.stringify(rawData)}`;
-    } catch {
-      data = `string:${rawData.toString()}`;
-    }
-    log("OUTGOING", this.id, rawData);
+  send(data: any, peers?: string | string[]): void {
+    log("OUTGOING", "magenta", this.id, data);
     if (peers) {
       if (typeof peers === "string") this.#peers.get(peers)?.send(data);
       else peers.forEach((id): void => this.#peers.get(id)?.send(data));
@@ -91,22 +86,6 @@ export default class Connection extends EventEmitter {
   }
 
   get id(): string {
-    return this.#self.id;
+    return this.peer.id;
   }
-}
-
-function log(tag: string, id: string, rawData?: any) {
-  let data;
-  try {
-    data = JSON.parse(rawData);
-  } catch {
-    data = rawData;
-  }
-  console.log(
-    `%c[${tag}] %c${id}`,
-    "color: magenta; font-weight: bold;",
-    "color: gray;",
-    `${data ? "\n" : ""}`,
-    data ?? ""
-  );
 }

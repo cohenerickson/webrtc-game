@@ -1,17 +1,13 @@
 import Connection from "./Connection";
+import Client from "./Client";
 
 const connection = new Connection();
+const client = new Client(connection);
 
-connection.on("ready", (id) => {
-  connection.send("Hello World!");
+connection.on("ready", () => {
+  client.push({ type: "test", data: "test" });
 });
 
-connection.on("data", (data: unknown): void => {});
-
-window.addEventListener("click", (event): void => {
-  connection.send({
-    type: "click",
-    x: event.clientX,
-    y: event.clientY
-  });
+client.on("requestValidation", (request) => {
+  Math.random() > 0.5 ? request.accept() : request.reject();
 });
